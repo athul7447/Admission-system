@@ -2,20 +2,23 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from .models import  (
-    AuditLog, UserProfile, OfferLetter, OfferLetterDoument
+    AuditLog, OfferLetter, OfferLetterDoument
 )
 from .serializers import (
     OfferLetterSerializer, OfferLetterListSerializer,UserSerializer
 )
 from django.contrib.auth.models import User
 from .decorators import consultant_only
-import ast
-import os
 from django.db import transaction
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from .langchain_agent import agent_executor
 from utility.queue_jobs import send_offer_letter_email
-
+from langchain.document_loaders import PyPDFLoader
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
+from langchain.llms import HuggingFaceHub
+import json
+from django.conf import settings    
 
 
 class SendOfferLetterView(APIView):
@@ -132,7 +135,7 @@ class SendOfferLetterView(APIView):
                     status=status.HTTP_400_BAD_REQUEST)
 
         return Response({
-            "message": f"Offer letters successfully sent to {created_count} users."
+            "message": f"Offer letters created successfully."
         }, status=status.HTTP_201_CREATED)
         
     
@@ -162,7 +165,7 @@ class LangChainQueryView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class FetchStudentsAndConsultants(APIView):
+class FetchStudents(APIView):
     
     # permission_classes = [permissions.IsAuthenticated]
     
@@ -177,3 +180,71 @@ class FetchStudentsAndConsultants(APIView):
                 "data": serializer.data
             }
         )
+        
+    
+class FetchDataFromDocument(APIView):
+
+    def get(self, request):
+        document_id = request.GET.get("document_id")
+        document = OfferLetterDoument.objects.filter(id=document_id).first()
+
+        if not document:
+            return Response({
+                "status": False,
+                "message": "Document not found",
+            })
+
+        # Load and extract first page
+        try:
+            loader = PyPDFLoader(document.document.path)
+            pages = loader.load()
+            first_page_text = pages[0].page_content.strip()
+        except Exception as e:
+            return Response({
+                "status": False,
+                "message": f"Failed to read PDF: {str(e)}"
+            })
+
+        # Setup LLM
+        llm = HuggingFaceHub(
+            repo_id="facebook/bart-large-cnn",  # make sure this model works or switch
+            huggingfacehub_api_token=settings.HUGGING_FACE_TOKENS,
+            model_kwargs={"temperature": 0.3, "max_length": 256}
+        )
+
+        prompt_template = PromptTemplate(
+                input_variables=["text"],
+                template="""
+            Extract the following fields from this offer letter text:
+            - Student Name
+            - Course Name
+            - Offer Date
+
+            Text:
+            {text}
+
+            Return result strictly in this JSON format only:
+            {{
+                "student_name": "John Doe",
+                "course": "Computer Science",
+                "offer_date": "2023-09-01"
+            }}
+            """
+            )
+
+        chain = LLMChain(llm=llm, prompt=prompt_template)
+
+
+        try:
+            response = chain.run(text=first_page_text)
+            data = json.loads(response)
+            return Response({
+                "status": True,
+                "data": data
+            })
+        except Exception as e:
+            return Response({
+                "status": False,
+                "message": f"LLM parsing failed: {str(e)}",
+                "raw_response": response if 'response' in locals() else None
+            })
