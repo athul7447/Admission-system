@@ -13,7 +13,7 @@ import ast
 import os
 from django.db import transaction
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from .langchain_agent import agent
+from .langchain_agent import agent_executor
 from utility.queue_jobs import send_offer_letter_email
 
 
@@ -170,7 +170,7 @@ class LangChainQueryView(APIView):
         if not query:
             return Response({"error": "Query is required."}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            result = agent.run(query)
+            result = agent_executor.run(input=)
             return Response({"response": result})
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
