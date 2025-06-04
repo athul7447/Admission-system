@@ -19,6 +19,7 @@ from langchain.chains import LLMChain
 from langchain.llms import HuggingFaceHub
 import json
 from django.conf import settings    
+import fitz
 
 
 class SendOfferLetterView(APIView):
@@ -194,49 +195,60 @@ class FetchDataFromDocument(APIView):
                 "message": "Document not found",
             })
 
-        # Load and extract first page
+        # Step 1: Extract form fields from first page using PyMuPDF
         try:
-            loader = PyPDFLoader(document.document.path)
-            pages = loader.load()
-            first_page_text = pages[0].page_content.strip()
+            doc = fitz.open(document.document.path)
+            first_page = doc[0]
+            field_data = {}
+
+            for widget in first_page.widgets():
+                if widget.field_name and widget.field_value:
+                    field_data[widget.field_name.strip()] = widget.field_value.strip()
+
+            doc.close()
+
+            # Convert form fields to plain text for LLM
+            formatted_text = "\n".join([f"{key}: {value}" for key, value in field_data.items()])
         except Exception as e:
             return Response({
                 "status": False,
-                "message": f"Failed to read PDF: {str(e)}"
+                "message": f"Failed to read PDF form fields: {str(e)}"
             })
 
-        # Setup LLM
+        # Step 2: Set up LangChain
         llm = HuggingFaceHub(
-            repo_id="facebook/bart-large-cnn",  # make sure this model works or switch
+            repo_id="HuggingFaceH4/zephyr-7b-beta",
             huggingfacehub_api_token=settings.HUGGING_FACE_TOKENS,
             model_kwargs={"temperature": 0.3, "max_length": 256}
         )
 
         prompt_template = PromptTemplate(
-                input_variables=["text"],
-                template="""
-            Extract the following fields from this offer letter text:
-            - Student Name
-            - Course Name
-            - Offer Date
+            input_variables=["text"],
+            template="""
+            You are a helpful assistant. Extract the following details from the form data:
+
+            - Student Name (from "Your Name")
+            - Course Name (from "Program Name 2")
+            - Offer Date (from "Text Field 5", format should be YYYY-MM-DD)
 
             Text:
             {text}
 
-            Return result strictly in this JSON format only:
+            Return the result strictly in JSON format:
             {{
-                "student_name": "John Doe",
-                "course": "Computer Science",
-                "offer_date": "2023-09-01"
+            "student_name": "John Doe",
+            "course": "BBA",
+            "offer_date": "2023-09-01"
             }}
+            give me this json only and nothing else
             """
-            )
+        )
 
         chain = LLMChain(llm=llm, prompt=prompt_template)
 
-
+        # Step 3: Run LLM and respond
         try:
-            response = chain.run(text=first_page_text)
+            response = chain.run(text=formatted_text)
             data = json.loads(response)
             return Response({
                 "status": True,
