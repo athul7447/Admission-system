@@ -47,17 +47,14 @@ class SendOfferLetterView(APIView):
 
     @consultant_only
     def post(self, request):
-        user_ids = request.data.get("user_ids", [])
-        print(user_ids, type(user_ids))
+        user_id = request.data.get("user_id")
         file = request.FILES.get("file")
         
-        if user_ids and isinstance(user_ids, str):
-            user_ids = ast.literal_eval(user_ids)
 
-        if not isinstance(user_ids, list) or not user_ids:
+        if not user_id:
             return Response(
                 {
-                    "error": "user_ids must be a non-empty list."
+                    "error": "user_id is required."
                 }, 
                 status=status.HTTP_400_BAD_REQUEST
             )
@@ -69,31 +66,24 @@ class SendOfferLetterView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        users = User.objects.filter(id__in=user_ids).select_related('userprofile')
-        user_map = {user.id: user for user in users}
+        user = User.objects.filter(id=user_id).first()
+        
+        if not user:
+            return Response(
+                {
+                    "error": "User does not exist."
+                }, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        invalid_users = []
-        valid_users = []
-
-        for uid in user_ids:
-            user = user_map.get(uid)
-            if not user:
-                invalid_users.append({"id": uid, "error": "User not found"})
-                continue
-            try:
-                profile = user.userprofile
-                if profile.role != 'student':
-                    invalid_users.append({"id": uid, "role": profile.role})
-                else:
-                    valid_users.append(user)
-            except UserProfile.DoesNotExist:
-                invalid_users.append({"id": uid, "error": "UserProfile not found"})
-
-        if invalid_users:
+        role = user.userprofile.role
+        if role != 'student':
             return Response({
-                "error": "Some users have invalid roles or missing data.",
-                "details": invalid_users
+                "status" : False,
+                "message": "Only students can receive an offer letter.",
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
 
         errors = []
         created_count = 0
@@ -103,47 +93,43 @@ class SendOfferLetterView(APIView):
             
             attachment_path = document.document.path 
 
-            for user in valid_users:
-                role = user.userprofile.role
-
-                data = {
-                    "document": document.id,
-                    "user" : request.user.id,
-                    "student": user.id
-                }
-                # Validate and save the offer letter
-                serializer = OfferLetterSerializer(data=data)
+            data = {
+                "document": document.id,
+                "user" : request.user.id,
+                "student": user.id
+            }
+            # Validate and save the offer letter
+            serializer = OfferLetterSerializer(data=data)
+            
+            if serializer.is_valid():
+                serializer.save()
+                # Create audit log for each successful creation
+                AuditLog.objects.create(
+                    user=request.user,
+                    action="Sent Offer Letter",
+                    offer_letter=serializer.instance
+                )
                 
-                if serializer.is_valid():
-                    serializer.save()
-                    # Create audit log for each successful creation
-                    AuditLog.objects.create(
-                        user=request.user,
-                        action="Sent Offer Letter",
-                        offer_letter=serializer.instance
-                    )
-                    
-                    # Send offer letter email
-                    subject = "Offer Letter from Our Institution"
-                    message = "Please find your offer letter attached."
-                    
-                    #CELERY is not working on my system
-                    send_offer_letter_email.delay(
-                        student_email=user.email,
-                        subject=subject,
-                        message=message,
-                        attachment_path=attachment_path
-                    )
-                    
-                    created_count += 1
-                else:
-                    # Add errors to the response
-                    errors.append({"user_id": user.id, "errors": serializer.errors})
-        if errors:
-            return Response({
-                "message": f"Offer letters sent to {created_count} users.",
-                "errors": errors
-            }, status=status.HTTP_207_MULTI_STATUS)  # Multi-status for partial success
+                # Send offer letter email
+                subject = "Offer Letter from Our Institution"
+                message = "Please find your offer letter attached."
+                
+                #CELERY is not working on my system
+                send_offer_letter_email.delay(
+                    student_email=user.email,
+                    subject=subject,
+                    message=message,
+                    attachment_path=attachment_path
+                )
+                
+                created_count += 1
+            else:
+                return Response(
+                    {
+                        "status": False, 
+                        "message": serializer.errors
+                    },
+                    status=status.HTTP_400_BAD_REQUEST)
 
         return Response({
             "message": f"Offer letters successfully sent to {created_count} users."

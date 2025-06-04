@@ -33,6 +33,7 @@ class OfferLetter(models.Model):
     escalated = models.BooleanField(default=False)
     is_remider_sent = models.BooleanField(default=False)
     
+    
     @property
     def time_elapsed(self):
         return timesince(self.sent_at)
