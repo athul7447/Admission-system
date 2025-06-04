@@ -2,7 +2,7 @@ from celery import shared_task
 from django.core.mail import EmailMessage
 import os
 
-@shared_task
+# @shared_task
 def send_offer_letter_email(student_email, subject, message, attachment_path):
     try:
         email = EmailMessage(

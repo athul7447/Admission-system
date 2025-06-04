@@ -119,7 +119,7 @@ class SendOfferLetterView(APIView):
                 message = "Please find your offer letter attached."
                 
                 #CELERY is not working on my system
-                send_offer_letter_email.delay(
+                send_offer_letter_email(
                     student_email=user.email,
                     subject=subject,
                     message=message,
@@ -136,6 +136,7 @@ class SendOfferLetterView(APIView):
                     status=status.HTTP_400_BAD_REQUEST)
 
         return Response({
+            "status": True,
             "message": f"Offer letters created successfully."
         }, status=status.HTTP_201_CREATED)
         
