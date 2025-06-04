@@ -15,7 +15,7 @@ class AdmissionsConfig(AppConfig):
         scheduler = BackgroundScheduler()
         scheduler.add_job(
             send_reminder_and_escalate,
-            trigger=IntervalTrigger(minutes=5),  # adjust as needed
+            trigger=IntervalTrigger(minutes=30),  # adjust as needed
             id="offer_letter_reminder",
             name="Send offer letter reminders and escalations",
             replace_existing=True

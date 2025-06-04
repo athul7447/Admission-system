@@ -4,14 +4,18 @@ from rest_framework import status, permissions
 from .models import  (
     AuditLog, UserProfile, OfferLetter, OfferLetterDoument
 )
-from .serializers import OfferLetterSerializer, OfferLetterListSerializer
+from .serializers import (
+    OfferLetterSerializer, OfferLetterListSerializer,UserSerializer
+)
 from django.contrib.auth.models import User
-from .decorators import check_superadmin_and_roles
+from .decorators import consultant_only
 import ast
 import os
 from django.db import transaction
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from .langchain_agent import agent
+from utility.queue_jobs import send_offer_letter_email
+
 
 
 class SendOfferLetterView(APIView):
@@ -41,6 +45,7 @@ class SendOfferLetterView(APIView):
                 }
             )
 
+    @consultant_only
     def post(self, request):
         user_ids = request.data.get("user_ids", [])
         print(user_ids, type(user_ids))
@@ -77,7 +82,7 @@ class SendOfferLetterView(APIView):
                 continue
             try:
                 profile = user.userprofile
-                if profile.role not in ["student", "consultant"]:
+                if profile.role != 'student':
                     invalid_users.append({"id": uid, "role": profile.role})
                 else:
                     valid_users.append(user)
@@ -95,13 +100,16 @@ class SendOfferLetterView(APIView):
         with transaction.atomic():
             
             document = OfferLetterDoument.objects.create(document=file)
+            
+            attachment_path = document.document.path 
 
             for user in valid_users:
                 role = user.userprofile.role
 
                 data = {
                     "document": document.id,
-                    "user" : user.id
+                    "user" : request.user.id,
+                    "student": user.id
                 }
                 # Validate and save the offer letter
                 serializer = OfferLetterSerializer(data=data)
@@ -114,6 +122,19 @@ class SendOfferLetterView(APIView):
                         action="Sent Offer Letter",
                         offer_letter=serializer.instance
                     )
+                    
+                    # Send offer letter email
+                    subject = "Offer Letter from Our Institution"
+                    message = "Please find your offer letter attached."
+                    
+                    #CELERY is not working on my system
+                    send_offer_letter_email.delay(
+                        student_email=user.email,
+                        subject=subject,
+                        message=message,
+                        attachment_path=attachment_path
+                    )
+                    
                     created_count += 1
                 else:
                     # Add errors to the response
@@ -153,3 +174,20 @@ class LangChainQueryView(APIView):
             return Response({"response": result})
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class FetchStudentsAndConsultants(APIView):
+    
+    # permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        
+        users = User.objects.filter(userprofile__role='student').select_related('userprofile')
+        serializer = UserSerializer(users, many=True)
+        return Response(
+            {
+                "status": True,
+                "message": "Success",
+                "data": serializer.data
+            }
+        )

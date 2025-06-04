@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'corsheaders',
     'django_crontab',
     'authentication',
     'admissions'
@@ -56,6 +57,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django.middleware.common.CommonMiddleware'
 ]
 
 ROOT_URLCONF = 'admissions_system.urls'
@@ -162,9 +164,37 @@ EMAIL_USE_TLS = True
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@example.com')
 
 # CRON
-CRONJOBS = [
-    ('*/30 * * * *', 'utility.cron.send_reminder_and_escalate', '>> /var/log/cron.log 2>&1'),  # Every 15 minutes
-]
+# CRONJOBS = [
+#     ('*/30 * * * *', 'utility.cron.send_reminder_and_escalate', '>> /var/log/cron.log 2>&1'),  # Every 15 minutes
+# ]
 
 # OpenAI
 OPEN_AI_API_KEY = os.getenv('OPEN_AI_API_KEY', '')
+
+
+# CORS settings
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+# CORS_ALLOW_HEADERS = ["*"]
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'timezone',
+    'Client-Id',
+    "Secret-Key"
+]
+
+CORS_ALLOWED_ORIGINS = [    
+    'http://*',    
+    'https://*'
+    ]
+
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'

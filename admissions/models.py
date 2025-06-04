@@ -25,6 +25,7 @@ class OfferLetter(models.Model):
     ]
 
     user = models.ForeignKey(User, null=True, related_name='offer_letters', on_delete=models.SET_NULL)
+    student = models.ForeignKey(User, null=True,blank=True, related_name='students', on_delete=models.SET_NULL)
     document = models.ForeignKey(OfferLetterDoument, on_delete=models.SET_NULL, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='sent')
     sent_at = models.DateTimeField(auto_now_add=True)
