@@ -166,3 +166,5 @@ CRONJOBS = [
     ('*/30 * * * *', 'utility.cron.send_reminder_and_escalate', '>> /var/log/cron.log 2>&1'),  # Every 15 minutes
 ]
 
+# OpenAI
+OPEN_AI_API_KEY = os.getenv('OPEN_AI_API_KEY', '')
