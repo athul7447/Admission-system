@@ -19,7 +19,7 @@ def send_reminder_and_escalate():
             offer.is_remider_sent = True
             offer.save()
             send_notification_email(subject, message, recipients)
-            _log_action(f"Reminder sent to {offer.user.email} and {offer.consultant.email}", user=offer.consultant)
+            _log_action(f"Reminder sent to {offer.user.email}", user=offer.user)
 
         if days_passed >= 5:
             # Escalate the case
@@ -36,7 +36,7 @@ def send_reminder_and_escalate():
 
             if recipients:
                 send_notification_email(subject, message, recipients)
-            _log_action(f"Escalated offer for {offer.user.email} to team lead {offer.team_lead.email}", user=offer.consultant)
+            _log_action(f"Escalated offer for {offer.user.email}", user=offer.user)
 
 
 def send_notification_email(subject, message, recipients):

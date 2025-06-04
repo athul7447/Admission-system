@@ -27,8 +27,10 @@ def send_reminder_and_escalate():
                 send_notification_email(subject, message, recipients)
                 offer.is_remider_sent = True
                 offer.save()
-                _log_action(
-                    f"Reminder sent to {offer.user.email} and {offer.consultant.email}", user=offer.user
+                log_action(
+                    f"Reminder sent to {offer.user.email}", 
+                    user=offer.user,
+                    offer=offer
                 )
 
             if days_passed >= 5:
@@ -44,7 +46,10 @@ def send_reminder_and_escalate():
 
                 if recipients:
                     send_notification_email(subject, message, recipients)
-                _log_action(f"Escalated offer for {offer.user.email} to team lead", user=offer.user)
+                log_action(
+                    f"Escalated offer for {offer.user.email} to team lead", 
+                    user=offer.user,
+                    offer=offer)
         except Exception as e:
             print(e)
 
@@ -59,9 +64,9 @@ def send_notification_email(subject, message, recipients):
         fail_silently=False
     )
 
-def _log_action(action, user=None):
+def log_action(action, user=None, offer=None):
     AuditLog.objects.create(
+        offer_letter=offer,
         action=action,
         user=user,
-        timestamp=timezone.now()
     )
