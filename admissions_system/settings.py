@@ -151,3 +151,18 @@ SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': True,
 }
+
+# Email
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'sandbox.smtp.mailtrap.io')
+EMAIL_PORT = os.getenv('EMAIL_PORT', '587')
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'f8c6f6')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', 'f8c6f6')
+EMAIL_USE_TLS = True
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@example.com')
+
+# CRON
+CRONJOBS = [
+    ('*/30 * * * *', 'utility.cron.send_reminder_and_escalate', '>> /var/log/cron.log 2>&1'),  # Every 15 minutes
+]
+
