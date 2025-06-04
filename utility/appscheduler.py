@@ -1,7 +1,7 @@
 from django.utils import timezone
 from datetime import timedelta
 from admissions.models import OfferLetter, AuditLog, UserProfile
-from django.core.mail import send_mail
+from django.core.mail import EmailMessage
 from django.conf import settings
 
 def send_reminder_and_escalate():
@@ -20,17 +20,25 @@ def send_reminder_and_escalate():
         try:
             days_passed = (now - offer.sent_at).days
             print(f"Days passed: {days_passed} for offer {offer.id}")
+            
+            attachment_path = offer.document.document.path if offer.document and offer.document.document else None
+            
             if days_passed >= 3  and not offer.is_remider_sent:
                 subject = "Reminder: Offer Letter Not Signed"
                 message = "Please sign the offer letter sent to you. This is a gentle reminder."
                 recipients = [offer.user.email]
-                send_notification_email(subject, message, recipients)
+                send_notification_email(
+                    subject,
+                    message, 
+                    recipients,
+                    attachment_path=attachment_path)
                 offer.is_remider_sent = True
                 offer.save()
                 log_action(
                     f"Reminder sent to {offer.user.email}", 
                     user=offer.user,
-                    offer=offer
+                    offer=offer,
+                    
                 )
 
             if days_passed >= 5:
@@ -55,14 +63,19 @@ def send_reminder_and_escalate():
 
     print("Exited send_reminder_and_escalate function")
 
-def send_notification_email(subject, message, recipients):
-    send_mail(
+def send_notification_email(subject, message, recipients,attachment_path=None):
+    email = EmailMessage(
         subject=subject,
-        message=message,
+        body=message,
         from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=recipients,
-        fail_silently=False
+        to=recipients,
     )
+
+    # Attach file if provided
+    if attachment_path:
+        email.attach_file(attachment_path)
+
+    email.send(fail_silently=False)
 
 def log_action(action, user=None, offer=None):
     AuditLog.objects.create(
