@@ -11,7 +11,7 @@ import ast
 import os
 from django.db import transaction
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-
+from .langchain_agent import agent
 
 
 class SendOfferLetterView(APIView):
@@ -127,3 +127,29 @@ class SendOfferLetterView(APIView):
         return Response({
             "message": f"Offer letters successfully sent to {created_count} users."
         }, status=status.HTTP_201_CREATED)
+        
+    
+class LangChainQueryView(APIView):
+    def get(self, request):
+        """
+        Run a query on the LangChain agent.
+
+        Args:
+            query (str): The query to run on the agent.
+
+        Returns:
+            Response: A response object containing the result of the query.
+
+        Raises:
+            400: If the query is not provided.
+            500: If there is an internal server error.
+        """
+        
+        query = request.GET.get("query")
+        if not query:
+            return Response({"error": "Query is required."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            result = agent.run(query)
+            return Response({"response": result})
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
