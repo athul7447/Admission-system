@@ -170,7 +170,7 @@ class LangChainQueryView(APIView):
         if not query:
             return Response({"error": "Query is required."}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            result = agent_executor.run(input=)
+            result = agent_executor.run(input=query)
             return Response({"response": result})
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
