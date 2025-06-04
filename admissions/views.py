@@ -4,18 +4,42 @@ from rest_framework import status, permissions
 from .models import  (
     AuditLog, UserProfile, OfferLetter, OfferLetterDoument
 )
-from .serializers import OfferLetterSerializer
+from .serializers import OfferLetterSerializer, OfferLetterListSerializer
 from django.contrib.auth.models import User
 from .decorators import check_superadmin_and_roles
 import ast
 import os
 from django.db import transaction
-from django.core.files.storage import default_storage
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
 
 
 class SendOfferLetterView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        page = request.query_params.get("page", 1)
+        size = request.query_params.get("size", 10)
+        
+        offer_letters = OfferLetter.objects.all().order_by("-sent_at")
+        paginator = Paginator(offer_letters, size)
+
+        try:
+            page_obj = paginator.page(page)
+        except PageNotAnInteger:
+            page_obj = paginator.page(1)
+        except EmptyPage:
+            page_obj = paginator.page(paginator.num_pages)
+
+        serializer = OfferLetterListSerializer(page_obj, many=True)
+        return Response(
+                {
+                    "status": True,
+                    "message": "Success",
+                    "data": serializer.data, 
+                    "total_pages": paginator.num_pages
+                }
+            )
 
     def post(self, request):
         user_ids = request.data.get("user_ids", [])
@@ -73,12 +97,12 @@ class SendOfferLetterView(APIView):
             document = OfferLetterDoument.objects.create(document=file)
 
             for user in valid_users:
+                role = user.userprofile.role
+
                 data = {
-                    "student": user.id,
-                    "consultant": request.user.id,
                     "document": document.id,
+                    "user" : user.id
                 }
-                
                 # Validate and save the offer letter
                 serializer = OfferLetterSerializer(data=data)
                 
